@@ -7,8 +7,7 @@ Here we are going to implement various GAN papers. So far, the papers implemente
 - Mehdi Mirza, Simon Osindero: Conditional Generative Adversarial Networks. NIPS 2014
 	    results given on MNIST (networks are MLP) and CIFAR-10 (networks are convolutional based)
 - Alec Radford, Luke Metz, Soumith Chintala: Unsupervised Representation Learning with Deep Convolutional Generative Adversarial Networks. ICLR 2016
-	    results given on CIFAR-10 and LSUN Bedrooms
-	    it supports MSE loss which means that it also implements the following article:
+	    results given on CIFAR-10 and LSUN Bedrooms.
 - Xudong Mao, Qing Li, Haoran Xie, Raymond YK Lau, Zhen Wang, Stephen Paul Smolley: Least squares generative adversarial networks, ICCV 2017	
 - Martín Arjovsky, Soumith Chintala, Léon Bottou: Wasserstein Generative Adversarial Networks. ICML 2017
 	    results given on CIFAR-10 and LSUN Bedrooms# GAN
