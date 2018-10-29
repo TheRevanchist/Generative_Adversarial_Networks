@@ -1,10 +1,11 @@
 # import needed pytorch modules
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader
 import torchvision
 from torchvision.utils import save_image
 import torchvision.transforms as transforms
+from net import Generator_Conv as Generator
+from net import Discriminator_Conv as Discriminator
 
 # import other libraries
 import os
@@ -59,80 +60,6 @@ def weights_init(m):
         m.weight.data.normal_(1.0, 0.02)
         m.bias.data.fill_(0)
 
-
-class Generator(nn.Module):
-    def __init__(self):
-        super(Generator, self).__init__()
-
-        self.model = nn.Sequential(
-            nn.ConvTranspose2d(opt.latent + opt.n_classes, opt.num_filters * 8, 4, 1, 0, bias=False),
-            nn.ReLU(True),
-            nn.BatchNorm2d(opt.num_filters * 8),
-            nn.ConvTranspose2d(opt.num_filters * 8, opt.num_filters * 4, 4, 2, 1, bias=False),
-            nn.ReLU(True),
-            nn.BatchNorm2d(opt.num_filters * 4),
-            nn.ConvTranspose2d(opt.num_filters * 4, opt.num_filters * 2, 4, 2, 1, bias=False),
-            nn.ReLU(True),
-            nn.BatchNorm2d(opt.num_filters * 2),
-            nn.ConvTranspose2d(opt.num_filters * 2, opt.num_filters, 4, 2, 1, bias=False),
-            nn.ReLU(True),
-            nn.BatchNorm2d(opt.num_filters),
-            nn.ConvTranspose2d(opt.num_filters, opt.channels, 4, 2, 1, bias=False),
-            nn.Tanh()
-        )
-
-    def forward(self, z, labels):
-        image_and_label = torch.cat((z, labels), dim=1)
-        img = self.model(image_and_label)
-        return img
-
-
-class Discriminator(nn.Module):
-    def __init__(self):
-        super(Discriminator, self).__init__()
-
-        self.model_image = nn.Sequential(
-            nn.Conv2d(opt.channels, opt.num_filters, 4, 2, 1),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.BatchNorm2d(opt.num_filters),
-            nn.Conv2d(opt.num_filters, opt.num_filters * 2, 4, 2, 1),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.BatchNorm2d(opt.num_filters * 2),
-            nn.Conv2d(opt.num_filters * 2, opt.num_filters * 4, 4, 2, 1),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.BatchNorm2d(opt.num_filters * 4),
-            nn.Conv2d(opt.num_filters * 4, opt.num_filters * 8, 4, 2, 1),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.BatchNorm2d(opt.num_filters * 8)
-        )
-
-        self.model_labels = nn.Sequential(
-            nn.Linear(opt.n_classes, 128),
-            nn.ReLU(),
-            nn.Linear(128, 256),
-            nn.ReLU(),
-            nn.Linear(256, 512),
-            nn.ReLU(),
-            nn.Linear(512, 1024),
-            nn.ReLU()
-        )
-
-        self.final = nn.Sequential(
-            nn.Linear(opt.num_filters * 8 * 4 * 4 + 1024, 1),
-            nn.Sigmoid()
-        )
-
-    def forward(self, img, labels):
-        x_image = self.model_image(img)
-        x_image = x_image.view(-1, opt.num_filters * 8 * 4 * 4)
-        x_labels = self.model_labels(labels)
-        # concatenate image and labels
-        image_and_label = torch.cat((x_image, x_labels), dim=1)
-        prob = self.final(image_and_label)
-        return prob
-        # return prob.view(-1, 1).squeeze(1)
-
-
 def one_hot_embedding(labels, num_classes):
     """Embedding labels to one-hot form.
 
@@ -149,16 +76,17 @@ def one_hot_embedding(labels, num_classes):
 
 # create the objects for loss function, two networks and for the two optimizers
 adversarial_loss = torch.nn.BCELoss()
-generator = Generator()
-discriminator = Discriminator()
+generator = Generator(latent=opt.latent, n_classes=opt.n_classes, num_filters=opt.num_filters, channels=opt.channels)
+discriminator = Discriminator(channels=opt.channels, num_filters=opt.num_filters, n_classes=opt.n_classes)
 optimizer_G = torch.optim.Adam(generator.parameters(), lr=opt.learning_rate, betas=(opt.beta_1, opt.beta_2))
 optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=opt.learning_rate, betas=(opt.beta_1, opt.beta_2))
 
 # put the nets on gpu
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 generator, discriminator = generator.to(device), discriminator.to(device)
-generator.apply(weights_init)
-discriminator.apply(weights_init)
+print(generator)
+# generator.apply(weights_init)
+# discriminator.apply(weights_init)
 
 # start training
 current_epoch = 0
@@ -179,14 +107,14 @@ for epoch in range(opt.n_epochs):
         generated_images = generator(z, labels_unsqueeze)
 
         # measure the generator loss and do backpropagation
-        g_loss = adversarial_loss(discriminator(generated_images, labels), real)
+        g_loss = adversarial_loss(discriminator(generated_images, labels, opt.num_filters), real)
         g_loss.backward()
         optimizer_G.step()
 
         # train the discriminator
         optimizer_D.zero_grad()
-        real_loss = adversarial_loss(discriminator(inputs, labels), real)
-        fake_loss = adversarial_loss(discriminator(generated_images.detach(), labels), fake)
+        real_loss = adversarial_loss(discriminator(inputs, labels, opt.num_filters), real)
+        fake_loss = adversarial_loss(discriminator(generated_images.detach(), labels, opt.num_filters), fake)
         d_loss = (real_loss + fake_loss) / 2
 
         d_loss.backward()
@@ -204,5 +132,5 @@ for epoch in range(opt.n_epochs):
             generated_images = generator(z, labels_unsqueeze)
             print("[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]" % (epoch, opt.n_epochs, i, len(dataloader),
                                                                              d_loss.item(), g_loss.item()))
-            save_image(generated_images.data, 'images/%d.png' % current_epoch, nrow=5, normalize=True)
+            save_image(generated_images.data, 'cifar/%d.png' % current_epoch, nrow=5, normalize=True)
             current_epoch += 1
