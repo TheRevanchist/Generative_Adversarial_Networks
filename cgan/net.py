@@ -80,7 +80,7 @@ class Discriminator(nn.Module):
 
 class Generator_Conv(nn.Module):
     def __init__(self, latent, n_classes, num_filters, channels):
-        super(Generator, self).__init__()
+        super(Generator_Conv, self).__init__()
 
         self.model = nn.Sequential(
             nn.ConvTranspose2d(latent + n_classes, num_filters * 8, 4, 1, 0, bias=False),
@@ -107,7 +107,7 @@ class Generator_Conv(nn.Module):
 
 class Discriminator_Conv(nn.Module):
     def __init__(self, channels, num_filters, n_classes):
-        super(Discriminator, self).__init__()
+        super(Discriminator_Conv, self).__init__()
 
         self.model_image = nn.Sequential(
             nn.Conv2d(channels, num_filters, 4, 2, 1),
